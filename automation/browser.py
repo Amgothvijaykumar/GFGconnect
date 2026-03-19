@@ -40,6 +40,15 @@ class GFGBrowser:
         log_info("Launching browser...")
         os.makedirs(SESSION_DIR, exist_ok=True)
 
+        # Clean up stale lock file from crashed/suspended sessions
+        lock_file = os.path.join(SESSION_DIR, "SingletonLock")
+        if os.path.exists(lock_file):
+            try:
+                os.remove(lock_file)
+                log_info("Removed stale browser lock file.")
+            except OSError:
+                pass
+
         self.playwright = sync_playwright().start()
         self.context = self.playwright.chromium.launch_persistent_context(
             user_data_dir=SESSION_DIR,
