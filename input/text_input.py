@@ -5,59 +5,96 @@ Handles capturing text input from voice dictation or typed text.
 
 import speech_recognition as sr
 import pyperclip
+import threading
+import sys
 
 
 def get_voice_input():
     """
     Capture voice input using the microphone and convert to text.
     Uses Google's free Speech-to-Text API.
+    Waits until the user finishes speaking (long pauses allowed).
 
     Returns:
         str: Recognized text, or None if failed
     """
     recognizer = sr.Recognizer()
 
+    # Allow longer pauses between words/sentences (default is 0.8s)
+    recognizer.pause_threshold = 3.0      # Wait 3 seconds of silence before stopping
+    recognizer.phrase_threshold = 0.3      # Minimum speaking duration to consider
+    recognizer.non_speaking_duration = 1.5  # Seconds of silence to keep in buffer
+
     print("\n🎤 Voice Input Mode")
     print("-" * 40)
-    print("🔊 Speak now... (will stop when you pause)")
-    print("   Press Ctrl+C to cancel.\n")
+    print("🔊 Speak clearly into your microphone.")
+    print("   The system will listen until you pause for 3+ seconds.")
+    print("   Press Ctrl+C to stop early.\n")
 
     try:
         with sr.Microphone() as source:
             # Adjust for ambient noise
-            print("   🔇 Adjusting for background noise...")
-            recognizer.adjust_for_ambient_noise(source, duration=1)
-            print("   ✅ Ready! Speak now...\n")
+            print("   🔇 Calibrating microphone...")
+            recognizer.adjust_for_ambient_noise(source, duration=2)
+            print("   ✅ Microphone ready!")
+            print("   🎙️  Listening... (speak now)\n")
 
-            # Listen for speech
-            audio = recognizer.listen(source, timeout=30, phrase_time_limit=60)
+            # Start a background indicator
+            stop_indicator = threading.Event()
+            indicator_thread = threading.Thread(
+                target=_listening_indicator, args=(stop_indicator,), daemon=True
+            )
+            indicator_thread.start()
 
-        print("   🔄 Converting speech to text...")
+            # Listen without strict timeout — wait for user to finish naturally
+            audio = recognizer.listen(
+                source,
+                timeout=120,           # Max 2 minutes to START speaking
+                phrase_time_limit=300,  # Max 5 minutes per phrase
+            )
+
+            stop_indicator.set()
+
+        print("\n\n   🔄 Converting speech to text...")
         text = recognizer.recognize_google(audio)
 
         if text:
-            print(f"\n   📝 Recognized: \"{text}\"")
+            print(f"\n   📝 Recognized text:")
+            print(f"   \"{text}\"\n")
             return text.strip()
         else:
             print("   ❌ Could not recognize speech.")
             return None
 
     except sr.WaitTimeoutError:
-        print("   ⏰ Timeout — no speech detected.")
+        print("\n   ⏰ Timeout — no speech detected in 2 minutes.")
         return None
     except sr.UnknownValueError:
-        print("   ❌ Could not understand the audio. Try speaking more clearly.")
+        print("\n   ❌ Could not understand the audio. Try speaking more clearly.")
         return None
     except sr.RequestError as e:
-        print(f"   ❌ Speech recognition service error: {e}")
+        print(f"\n   ❌ Speech recognition service error: {e}")
         return None
     except KeyboardInterrupt:
-        print("\n   ❌ Voice input cancelled.")
+        print("\n\n   ⏹️  Voice input stopped.")
+        # If we captured some audio before Ctrl+C, try to recognize it
         return None
     except OSError as e:
-        print(f"   ❌ Microphone error: {e}")
-        print("   💡 Make sure your microphone is connected and permitted.")
+        print(f"\n   ❌ Microphone error: {e}")
+        print("   💡 Make sure your microphone is connected and has permission.")
+        print("   💡 On macOS: System Settings → Privacy & Security → Microphone")
         return None
+
+
+def _listening_indicator(stop_event):
+    """Show a live indicator while listening."""
+    dots = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    i = 0
+    while not stop_event.is_set():
+        sys.stdout.write(f"\r   {dots[i % len(dots)]} Recording... (pause for 3s to finish)")
+        sys.stdout.flush()
+        stop_event.wait(0.1)
+        i += 1
 
 
 def get_text_input():

@@ -2,16 +2,24 @@
 Processing Module
 Handles AI-powered content rewriting using Google Gemini (free).
 Automatically converts raw learning notes into polished GFG Connect posts.
+Includes retry logic for rate limits.
 """
 
 import os
+import time
+import re
 from google import genai
 
 
 # Gemini API configuration
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
-GEMINI_MODEL = "gemini-2.0-flash"
 
+# Models to try (in order of preference)
+GEMINI_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+]
 
 # System prompt for consistent post formatting
 SYSTEM_PROMPT = """You are an expert social media post writer for GeeksforGeeks Connect — 
@@ -74,12 +82,22 @@ def get_api_key():
     return api_key
 
 
-def rewrite_with_ai(raw_text):
+def _extract_retry_delay(error_msg):
+    """Extract retry delay from error message."""
+    match = re.search(r"retry in (\d+\.?\d*)s", str(error_msg))
+    if match:
+        return float(match.group(1))
+    return 30  # Default 30 seconds
+
+
+def rewrite_with_ai(raw_text, max_retries=3):
     """
     Rewrite raw text into a polished GFG Connect post using Gemini AI.
+    Includes automatic retry with wait on rate limits.
 
     Args:
         raw_text: The raw text from voice/manual input
+        max_retries: Maximum number of retry attempts
 
     Returns:
         str: The AI-rewritten post content, or None if failed
@@ -89,12 +107,9 @@ def rewrite_with_ai(raw_text):
         print("   ❌ No API key provided. Cannot rewrite with AI.")
         return None
 
-    try:
-        print("\n   🤖 Rewriting with AI (Gemini)...")
+    client = genai.Client(api_key=api_key)
 
-        client = genai.Client(api_key=api_key)
-
-        prompt = f"""Rewrite the following raw learning notes into a polished 
+    prompt = f"""Rewrite the following raw learning notes into a polished 
 GeeksforGeeks Connect post:
 
 ---
@@ -103,29 +118,56 @@ GeeksforGeeks Connect post:
 
 Generate ONLY the post content, nothing else. No explanations or meta-text."""
 
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config={
-                "system_instruction": SYSTEM_PROMPT,
-                "temperature": 0.7,
-                "max_output_tokens": 1024,
-            },
-        )
+    # Try each model with retries
+    for model in GEMINI_MODELS:
+        for attempt in range(max_retries):
+            try:
+                print(f"\n   🤖 Rewriting with AI ({model})...")
 
-        if response and response.text:
-            result = response.text.strip()
-            # Clean up common formatting artifacts
-            result = clean_post(result)
-            print("   ✅ AI rewrite complete!")
-            return result
-        else:
-            print("   ❌ Empty response from AI.")
-            return None
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config={
+                        "system_instruction": SYSTEM_PROMPT,
+                        "temperature": 0.7,
+                        "max_output_tokens": 1024,
+                    },
+                )
 
-    except Exception as e:
-        print(f"   ❌ AI rewrite failed: {e}")
-        return None
+                if response and response.text:
+                    result = response.text.strip()
+                    result = clean_post(result)
+                    print("   ✅ AI rewrite complete!")
+                    return result
+                else:
+                    print("   ❌ Empty response from AI.")
+
+            except Exception as e:
+                error_str = str(e)
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    retry_delay = _extract_retry_delay(error_str)
+                    remaining = max_retries - attempt - 1
+
+                    if remaining > 0 or model != GEMINI_MODELS[-1]:
+                        print(f"   ⏳ Rate limited. Waiting {int(retry_delay)}s before retry...")
+                        print(f"      (Attempt {attempt + 1}/{max_retries} for {model})")
+
+                        # Countdown timer
+                        for sec in range(int(retry_delay), 0, -1):
+                            print(f"\r   ⏳ Retrying in {sec}s...  ", end="", flush=True)
+                            time.sleep(1)
+                        print()
+                        continue
+                    else:
+                        # Try next model
+                        print(f"   ⚠️  {model} quota exhausted. Trying next model...")
+                        break
+                else:
+                    print(f"   ❌ AI rewrite failed: {e}")
+                    return None
+
+    print("   ❌ All models exhausted. Could not rewrite with AI.")
+    return None
 
 
 def clean_post(content):
