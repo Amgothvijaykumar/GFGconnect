@@ -159,7 +159,7 @@ def step5_auto_post(content):
 
         # Check if logged in
         if not browser.check_login_status():
-            browser.wait_for_manual_login()
+            browser.login()
 
         # Fill the post content
         if not browser.fill_post(content):
