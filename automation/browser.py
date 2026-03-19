@@ -11,7 +11,8 @@ from utils.helpers import logger, log_success, log_error, log_info, log_warning
 
 
 # GFG Connect URLs
-GFG_CONNECT_URL = "https://connect.geeksforgeeks.org/"
+GFG_CONNECT_URL = "https://www.geeksforgeeks.org/connect/explore"
+GFG_CONNECT_HOME = "https://www.geeksforgeeks.org/connect/home"
 GFG_LOGIN_URL = "https://auth.geeksforgeeks.org/"
 
 # Browser session storage path
@@ -51,7 +52,7 @@ class GFGBrowser:
         return self.page
 
     def navigate_to_gfg_connect(self):
-        """Navigate to GFG Connect homepage."""
+        """Navigate to GFG Connect explore page."""
         log_info(f"Navigating to {GFG_CONNECT_URL}")
         self.page.goto(GFG_CONNECT_URL, wait_until="networkidle")
         log_success("GFG Connect page loaded.")
@@ -77,17 +78,20 @@ class GFGBrowser:
             bool: True if logged in, False otherwise
         """
         try:
-            # If "Sign In" button exists, user is NOT logged in
-            sign_in_btn = self.page.query_selector('div.signinButton')
+            # If "Sign In" button exists on this page, user is NOT logged in
+            sign_in_btn = self.page.query_selector('button.signinButton.login-modal-btn')
             if sign_in_btn:
                 log_warning("User is NOT logged in.")
                 return False
 
-            # Also check the top-right "Sign In" link
-            sign_in_link = self.page.query_selector('a:has-text("Sign In")')
+            # Also check for the top-right "Sign In" text
+            sign_in_link = self.page.query_selector('text="Sign In"')
             if sign_in_link:
-                log_warning("User is NOT logged in.")
-                return False
+                # Could be a post's Sign In - check if it's in the header area
+                bounding = sign_in_link.bounding_box()
+                if bounding and bounding["y"] < 60:
+                    log_warning("User is NOT logged in.")
+                    return False
 
             log_success("User is logged in.")
             return True
@@ -121,10 +125,22 @@ class GFGBrowser:
 
             # Click the "Sign In" button on GFG Connect page to open modal
             log_info("Opening login modal...")
-            sign_in_btn = self.page.query_selector('div.signinButton')
-            if not sign_in_btn:
-                # Try the top-right Sign In link
-                sign_in_btn = self.page.query_selector('a:has-text("Sign In")')
+
+            sign_in_selectors = [
+                'button.signinButton.login-modal-btn',
+                'button.signinButton',
+                'button:has-text("Sign In")',
+                'text="Sign In"',
+            ]
+
+            sign_in_btn = None
+            for selector in sign_in_selectors:
+                try:
+                    sign_in_btn = self.page.wait_for_selector(selector, timeout=3000)
+                    if sign_in_btn:
+                        break
+                except Exception:
+                    continue
 
             if sign_in_btn:
                 sign_in_btn.click()
@@ -139,6 +155,7 @@ class GFGBrowser:
             log_info("Entering username...")
             username_field = None
             username_selectors = [
+                'input.loginInput[placeholder="Username or Email"]',
                 'input[placeholder="Username or Email"]',
                 'input[placeholder="Username or email"]',
                 'input#luser',
@@ -165,6 +182,7 @@ class GFGBrowser:
             log_info("Entering password...")
             password_field = None
             password_selectors = [
+                'input.loginInput[placeholder="Enter password"]',
                 'input[placeholder="Enter password"]',
                 'input[placeholder="Password"]',
                 'input#password',
@@ -191,6 +209,7 @@ class GFGBrowser:
             log_info("Clicking Sign In...")
             login_btn = None
             login_selectors = [
+                'button.loginBtn.btnGreen.notSocialAuthBtn',
                 'button.notSocialAuthBtn',
                 'button.signin-button',
                 'button:has-text("Sign In")',
@@ -204,26 +223,31 @@ class GFGBrowser:
                     continue
 
             if not login_btn:
-                log_error("Could not find Sign In button.")
+                log_error("Could not find Sign In button in modal.")
                 return False
 
             login_btn.click()
             log_info("Sign In clicked. Waiting for login to complete...")
 
-            # Wait for login to complete (page navigation or modal close)
+            # Wait for login to complete
             self.page.wait_for_timeout(5000)
 
-            # Verify login success
-            # After login, the Sign In button should disappear
-            sign_in_check = self.page.query_selector('div.signinButton')
+            # Navigate to connect home after login
+            self.page.goto(GFG_CONNECT_HOME, wait_until="networkidle")
+            self.page.wait_for_timeout(2000)
+
+            # Verify login success — check for Sign In button absence
+            sign_in_check = self.page.query_selector('button.signinButton.login-modal-btn')
             if sign_in_check:
                 log_error("Login may have failed. Sign In button still visible.")
                 print("\n⚠️  Login might have failed. Please check:")
                 print("   - Are your credentials correct?")
                 print("   - Is there a CAPTCHA to solve?")
                 retry = input("   Press Enter after resolving, or type 'skip' to continue: ").strip()
-                if retry.lower() == 'skip':
+                if retry.lower() == "skip":
                     return True
+                # Reload and recheck
+                self.page.reload(wait_until="networkidle")
                 return self.check_login_status()
 
             log_success("Login successful! 🎉")
@@ -264,6 +288,13 @@ class GFGBrowser:
             self.wait_for_manual_login()
             return True
 
+    def navigate_to_home(self):
+        """Navigate to GFG Connect home page (for posting)."""
+        log_info(f"Navigating to {GFG_CONNECT_HOME}")
+        self.page.goto(GFG_CONNECT_HOME, wait_until="networkidle")
+        self.page.wait_for_timeout(2000)
+        log_success("GFG Connect Home page loaded.")
+
     def fill_post(self, content):
         """
         Fill the post content in GFG Connect's post form.
@@ -275,41 +306,67 @@ class GFGBrowser:
             bool: True if content was filled successfully
         """
         try:
-            log_info("Looking for post input area...")
+            # Make sure we're on the home page (where posting is available)
+            current_url = self.page.url
+            if "/connect/home" not in current_url:
+                self.navigate_to_home()
 
-            # Try common selectors for the post textarea
-            selectors = [
-                'textarea[placeholder*="write"]',
-                'textarea[placeholder*="Write"]',
-                'textarea[placeholder*="post"]',
-                'div[contenteditable="true"]',
-                'textarea.post-input',
-                '[data-placeholder*="write"]',
-                '[data-placeholder*="Write"]',
-                'textarea',
+            log_info("Looking for 'Share your thoughts' area...")
+
+            # Click on "Share your thoughts." to open the post editor
+            share_selectors = [
+                'text="Share your thoughts."',
+                'div:has-text("Share your thoughts")',
+                '[placeholder*="Share your thoughts"]',
             ]
 
-            textarea = None
-            for selector in selectors:
+            share_area = None
+            for selector in share_selectors:
                 try:
-                    textarea = self.page.wait_for_selector(selector, timeout=3000)
-                    if textarea:
-                        log_info(f"Found input area with selector: {selector}")
+                    share_area = self.page.wait_for_selector(selector, timeout=5000)
+                    if share_area:
+                        log_info(f"Found share area with: {selector}")
                         break
                 except Exception:
                     continue
 
-            if not textarea:
-                log_error("Could not find post input area. Selectors may need updating.")
+            if not share_area:
+                log_error("Could not find 'Share your thoughts' area.")
                 return False
 
-            # Click on the textarea to focus
-            textarea.click()
+            share_area.click()
+            self.page.wait_for_timeout(2000)
+            log_info("Post editor opened.")
+
+            # Find the content-editable textbox
+            textbox_selectors = [
+                'div.ContentEditable__root[role="textbox"]',
+                'div[role="textbox"][contenteditable="true"]',
+                'div[contenteditable="true"]',
+                'div.ContentEditable__root',
+            ]
+
+            textbox = None
+            for selector in textbox_selectors:
+                try:
+                    textbox = self.page.wait_for_selector(selector, timeout=5000)
+                    if textbox:
+                        log_info(f"Found textbox with: {selector}")
+                        break
+                except Exception:
+                    continue
+
+            if not textbox:
+                log_error("Could not find post textbox. Selectors may need updating.")
+                return False
+
+            # Click on the textbox and type content
+            textbox.click()
             self.page.wait_for_timeout(500)
 
-            # Type the content
-            textarea.fill(content)
-            self.page.wait_for_timeout(500)
+            # Use keyboard to type content (contenteditable divs work better with type)
+            self.page.keyboard.type(content, delay=10)
+            self.page.wait_for_timeout(1000)
 
             log_success(f"Post content filled ({len(content)} chars).")
             return True
@@ -320,40 +377,38 @@ class GFGBrowser:
 
     def submit_post(self):
         """
-        Click the post/submit button.
+        Click the Publish button to submit the post.
 
         Returns:
             bool: True if post was submitted successfully
         """
         try:
-            log_info("Looking for submit button...")
+            log_info("Looking for Publish button...")
 
-            # Try common selectors for the post button
+            # Try selectors for the Publish button
             selectors = [
+                'button:has-text("Publish")',
                 'button:has-text("Post")',
                 'button:has-text("Submit")',
-                'button:has-text("Publish")',
                 'button[type="submit"]',
-                'button.post-btn',
-                'button.submit-btn',
             ]
 
             button = None
             for selector in selectors:
                 try:
-                    button = self.page.wait_for_selector(selector, timeout=3000)
+                    button = self.page.wait_for_selector(selector, timeout=5000)
                     if button:
-                        log_info(f"Found submit button with selector: {selector}")
+                        log_info(f"Found publish button with: {selector}")
                         break
                 except Exception:
                     continue
 
             if not button:
-                log_error("Could not find submit button. Selectors may need updating.")
+                log_error("Could not find Publish button. Selectors may need updating.")
                 return False
 
             button.click()
-            self.page.wait_for_timeout(3000)
+            self.page.wait_for_timeout(5000)
 
             log_success("Post submitted successfully! 🎉")
             return True
