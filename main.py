@@ -1,27 +1,23 @@
 """
 🚀 Voice-to-GFG Connect Auto Posting System
 =============================================
-Main entry point that orchestrates the full pipeline:
-  Voice/Text Input → AI Formatting → Review → Confirm → Auto Post
+Simplified pipeline:
+  Voice/Text Input → Auto AI Rewrite → Review & Confirm → Auto Post
 
 Usage:
-    python main.py                  # Manual text input mode
-    python main.py --clipboard      # Read from clipboard
-    python main.py --prompt-only    # Only generate AI prompt (no posting)
+    python main.py              # Interactive mode (choose voice/text)
+    python main.py --clipboard  # Read from clipboard
 """
 
 import sys
-import pyperclip
 
-from input.text_input import get_input
-from processing.content import generate_prompt, format_post
+from input.text_input import get_input, get_text_input, get_voice_input, get_clipboard_input
+from processing.content import rewrite_with_ai
 from automation.browser import GFGBrowser
 from utils.helpers import (
-    logger,
     log_success,
     log_error,
     log_info,
-    log_warning,
     save_post_history,
 )
 
@@ -31,121 +27,84 @@ def display_banner():
     print()
     print("=" * 60)
     print("  🚀 Voice-to-GFG Connect Auto Posting System")
-    print("  📌 Speak → Review → Post (in under 1 minute)")
+    print("  📌 Speak/Type → AI Rewrites → Review → Post")
     print("=" * 60)
     print()
 
 
-def get_mode_from_args():
-    """Parse command line arguments for input mode."""
-    args = sys.argv[1:]
-    if "--clipboard" in args:
-        return "clipboard"
-    if "--prompt-only" in args:
-        return "prompt-only"
-    return "manual"
-
-
-def step1_get_input(mode):
-    """Step 1: Get raw text input from user."""
-    print("\n📌 STEP 1: Capture Your Learning")
+def step1_get_input():
+    """Step 1: Get raw text input from user (voice or text)."""
+    print("📌 STEP 1: Share Your Learning")
     print("-" * 40)
 
-    if mode == "clipboard":
-        raw_text = get_input(mode="clipboard")
-    else:
-        print("💡 Tip: Use voice dictation (macOS: Fn Fn) then paste here,")
-        print("   or type your learning directly.\n")
-        raw_text = get_input(mode="manual")
+    raw_text = get_input()
 
     if not raw_text:
         log_error("No input received. Exiting.")
         return None
 
-    print(f"\n✅ Captured {len(raw_text)} characters of text.")
+    print(f"\n✅ Captured {len(raw_text)} characters.")
     return raw_text
 
 
-def step2_generate_prompt(raw_text):
-    """Step 2: Generate AI prompt for content formatting."""
-    print("\n📌 STEP 2: Generate AI Prompt")
+def step2_ai_rewrite(raw_text):
+    """Step 2: Auto-rewrite using AI (Gemini)."""
+    print("\n📌 STEP 2: AI Rewriting Your Post")
     print("-" * 40)
 
-    prompt = generate_prompt(raw_text)
+    rewritten = rewrite_with_ai(raw_text)
 
-    print("\n📋 Copy this prompt and paste it into ChatGPT (free):")
-    print("=" * 60)
-    print(prompt)
-    print("=" * 60)
+    if not rewritten:
+        print("\n⚠️  AI rewrite failed. Using your original text instead.")
+        return raw_text
 
-    # Copy prompt to clipboard for convenience
-    try:
-        pyperclip.copy(prompt)
-        print("\n✅ Prompt copied to clipboard! Paste it in ChatGPT.")
-    except Exception:
-        print("\n⚠️  Could not copy to clipboard. Please copy manually.")
-
-    return prompt
+    return rewritten
 
 
-def step3_get_ai_response():
-    """Step 3: Get the AI-generated post content from user."""
-    print("\n📌 STEP 3: Paste AI Response")
+def step3_review_and_confirm(content, raw_text):
+    """Step 3: Review the AI-rewritten post and confirm."""
+    print("\n📌 STEP 3: Review & Confirm")
     print("-" * 40)
-    print("📋 After ChatGPT generates your post, copy it and paste here.")
-    print("   (Press Enter twice when done)\n")
-
-    lines = []
-    empty_count = 0
-    while True:
-        try:
-            line = input()
-            if line == "":
-                empty_count += 1
-                if empty_count >= 2:
-                    break
-                lines.append(line)
-            else:
-                empty_count = 0
-                lines.append(line)
-        except EOFError:
-            break
-
-    content = "\n".join(lines).strip()
-    if not content:
-        log_error("No AI response received.")
-        return None
-
-    return format_post(content)
-
-
-def step4_review_and_confirm(content):
-    """Step 4: Display content for review and get confirmation."""
-    print("\n📌 STEP 4: Review & Confirm")
-    print("-" * 40)
-    print("\n📄 Your post will look like this:")
-    print("=" * 60)
-    print(content)
-    print("=" * 60)
 
     while True:
-        response = input("\n🔔 Do you want to post this? (yes/no/edit): ").strip().lower()
+        print("\n📄 Your post will look like this:")
+        print("=" * 60)
+        print(content)
+        print("=" * 60)
+        print(f"\n   📊 Character count: {len(content)}")
+
+        print("\n   Options:")
+        print("   ✅ yes  — Post it!")
+        print("   ❌ no   — Cancel")
+        print("   🔄 redo — Regenerate with AI")
+        print("   ✏️  edit — Type your own version")
+
+        response = input("\n🔔 What would you like to do? ").strip().lower()
+
         if response in ("yes", "y"):
-            return True
+            return content
         elif response in ("no", "n"):
             print("❌ Post cancelled.")
             save_post_history(content, status="cancelled")
-            return False
+            return None
+        elif response in ("redo", "r"):
+            print("\n🔄 Regenerating...")
+            content = rewrite_with_ai(raw_text)
+            if not content:
+                print("⚠️  Regeneration failed. Using previous version.")
+                content = raw_text
         elif response in ("edit", "e"):
-            print("\n✏️  Enter the edited content (press Enter twice when done):")
-            return "edit"
+            print("\n✏️  Type your custom post (press Enter twice when done):")
+            custom = get_text_input()
+            if custom:
+                content = custom
         else:
-            print("⚠️  Please enter 'yes', 'no', or 'edit'.")
+            print("⚠️  Please enter 'yes', 'no', 'redo', or 'edit'.")
 
 
-def step5_auto_post(content):
-    """Step 5: Automatically post to GFG Connect using Playwright."""
-    print("\n📌 STEP 5: Auto Posting to GFG Connect")
+def step4_auto_post(content):
+    """Step 4: Automatically post to GFG Connect."""
+    print("\n📌 STEP 4: Auto Posting to GFG Connect")
     print("-" * 40)
 
     browser = GFGBrowser(headless=False)
@@ -167,8 +126,8 @@ def step5_auto_post(content):
             save_post_history(content, status="failed")
             return False
 
-        # Final confirmation before clicking submit
-        confirm = input("\n🔔 Content is filled. Click 'Post' now? (yes/no): ").strip().lower()
+        # Final confirmation before publishing
+        confirm = input("\n🔔 Content is filled in browser. Publish now? (yes/no): ").strip().lower()
         if confirm not in ("yes", "y"):
             print("❌ Posting cancelled at final step.")
             save_post_history(content, status="draft")
@@ -198,41 +157,36 @@ def main():
     """Main execution flow."""
     display_banner()
 
-    mode = get_mode_from_args()
+    mode = "clipboard" if "--clipboard" in sys.argv else "interactive"
     log_info(f"Starting in '{mode}' mode.")
 
     # Step 1: Get raw input
-    raw_text = step1_get_input(mode)
+    if mode == "clipboard":
+        print("📌 STEP 1: Reading from Clipboard")
+        print("-" * 40)
+        raw_text = get_clipboard_input()
+        if not raw_text:
+            print("⚠️  Clipboard empty. Switching to interactive mode.")
+            raw_text = get_input()
+        else:
+            print(f"✅ Got {len(raw_text)} chars from clipboard.")
+            print(f"📝 Content: \"{raw_text[:100]}{'...' if len(raw_text) > 100 else ''}\"")
+    else:
+        raw_text = step1_get_input()
+
     if not raw_text:
         return
 
-    # Step 2: Generate AI prompt
-    if mode == "prompt-only":
-        step2_generate_prompt(raw_text)
-        print("\n✅ Done! Use the prompt above with ChatGPT.")
-        return
+    # Step 2: AI rewrite
+    content = step2_ai_rewrite(raw_text)
 
-    step2_generate_prompt(raw_text)
-
-    # Step 3: Get AI response
-    content = step3_get_ai_response()
+    # Step 3: Review and confirm
+    content = step3_review_and_confirm(content, raw_text)
     if not content:
         return
 
-    # Step 4: Review and confirm
-    while True:
-        result = step4_review_and_confirm(content)
-        if result is True:
-            break
-        elif result == "edit":
-            content = step3_get_ai_response()
-            if not content:
-                return
-        else:
-            return
-
-    # Step 5: Auto post
-    step5_auto_post(content)
+    # Step 4: Auto post
+    step4_auto_post(content)
 
     print("\n" + "=" * 60)
     print("  ✅ All done! See you tomorrow! 🚀")
