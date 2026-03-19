@@ -1,25 +1,17 @@
 """
 Processing Module
-Handles AI-powered content rewriting using Google Gemini (free).
-Automatically converts raw learning notes into polished GFG Connect posts.
-Includes retry logic for rate limits.
+Handles AI-powered content rewriting for GFG Connect posts.
+Supports multiple AI providers: Groq (primary, fast+free) and Gemini (fallback).
 """
 
 import os
 import time
 import re
-from google import genai
 
 
-# Gemini API configuration
+# API key env variable names
+GROQ_API_KEY_ENV = "GROQ_API_KEY"
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
-
-# Models to try (in order of preference)
-GEMINI_MODELS = [
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-]
 
 # System prompt for consistent post formatting
 SYSTEM_PROMPT = """You are an expert social media post writer for GeeksforGeeks Connect — 
@@ -40,76 +32,7 @@ Rules:
 - Make it feel authentic, not AI-generated
 - Keep total length under 1000 characters"""
 
-
-def get_api_key():
-    """
-    Get Gemini API key from environment or prompt user.
-
-    Returns:
-        str: The API key, or None if not provided
-    """
-    api_key = os.environ.get(GEMINI_API_KEY_ENV)
-    if api_key:
-        return api_key
-
-    # Check .env file in project root
-    env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
-    if os.path.exists(env_file):
-        with open(env_file) as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith(f"{GEMINI_API_KEY_ENV}="):
-                    api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    if api_key:
-                        return api_key
-
-    # Prompt user for API key
-    print("\n🔑 Gemini API Key Required (free)")
-    print("   Get yours at: https://aistudio.google.com/apikey")
-    print("   (It's completely FREE — no credit card needed)\n")
-
-    api_key = input("   Paste your API key: ").strip()
-    if not api_key:
-        return None
-
-    # Save to .env for next time
-    save = input("   💾 Save key for future use? (yes/no): ").strip().lower()
-    if save in ("yes", "y"):
-        with open(env_file, "a") as f:
-            f.write(f"\n{GEMINI_API_KEY_ENV}={api_key}\n")
-        print("   ✅ Saved to .env file (git-ignored).")
-
-    return api_key
-
-
-def _extract_retry_delay(error_msg):
-    """Extract retry delay from error message."""
-    match = re.search(r"retry in (\d+\.?\d*)s", str(error_msg))
-    if match:
-        return float(match.group(1))
-    return 30  # Default 30 seconds
-
-
-def rewrite_with_ai(raw_text, max_retries=3):
-    """
-    Rewrite raw text into a polished GFG Connect post using Gemini AI.
-    Includes automatic retry with wait on rate limits.
-
-    Args:
-        raw_text: The raw text from voice/manual input
-        max_retries: Maximum number of retry attempts
-
-    Returns:
-        str: The AI-rewritten post content, or None if failed
-    """
-    api_key = get_api_key()
-    if not api_key:
-        print("   ❌ No API key provided. Cannot rewrite with AI.")
-        return None
-
-    client = genai.Client(api_key=api_key)
-
-    prompt = f"""Rewrite the following raw learning notes into a polished 
+USER_PROMPT = """Rewrite the following raw learning notes into a polished 
 GeeksforGeeks Connect post:
 
 ---
@@ -118,15 +41,147 @@ GeeksforGeeks Connect post:
 
 Generate ONLY the post content, nothing else. No explanations or meta-text."""
 
-    # Try each model with retries
-    for model in GEMINI_MODELS:
-        for attempt in range(max_retries):
+
+def _get_env_file():
+    """Get path to .env file."""
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
+
+
+def _load_key_from_env(key_name):
+    """Load an API key from environment or .env file."""
+    # Check environment variable first
+    val = os.environ.get(key_name)
+    if val:
+        return val
+
+    # Check .env file
+    env_file = _get_env_file()
+    if os.path.exists(env_file):
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith(f"{key_name}="):
+                    val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    if val:
+                        return val
+    return None
+
+
+def _save_key_to_env(key_name, key_value):
+    """Save an API key to .env file."""
+    env_file = _get_env_file()
+    with open(env_file, "a") as f:
+        f.write(f"\n{key_name}={key_value}\n")
+
+
+def _get_or_prompt_key(key_name, service_name, signup_url):
+    """Get API key from env, or prompt user."""
+    key = _load_key_from_env(key_name)
+    if key:
+        return key
+
+    print(f"\n🔑 {service_name} API Key Required (free)")
+    print(f"   Get yours at: {signup_url}")
+    print("   (Completely FREE — no credit card needed)\n")
+
+    key = input("   Paste your API key: ").strip()
+    if not key:
+        return None
+
+    save = input("   💾 Save for future use? (yes/no): ").strip().lower()
+    if save in ("yes", "y"):
+        _save_key_to_env(key_name, key)
+        print("   ✅ Saved to .env file.")
+
+    return key
+
+
+# ============================================================
+# GROQ (Primary) - Fast & Free
+# ============================================================
+
+def _rewrite_with_groq(raw_text):
+    """
+    Rewrite using Groq API (Llama model — fast & free).
+    Free tier: 30 RPM, 14400 RPD, 131072 tokens/min.
+    """
+    try:
+        from groq import Groq
+    except ImportError:
+        print("   ⚠️  Groq package not installed.")
+        return None
+
+    api_key = _get_or_prompt_key(
+        GROQ_API_KEY_ENV,
+        "Groq",
+        "https://console.groq.com/keys"
+    )
+    if not api_key:
+        return None
+
+    try:
+        print("\n   🤖 Rewriting with AI (Groq/Llama — fast)...")
+
+        client = Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": USER_PROMPT.format(raw_text=raw_text)},
+            ],
+            temperature=0.7,
+            max_tokens=1024,
+        )
+
+        if response and response.choices:
+            result = response.choices[0].message.content.strip()
+            result = clean_post(result)
+            print("   ✅ AI rewrite complete! (via Groq)")
+            return result
+
+        print("   ❌ Empty response from Groq.")
+        return None
+
+    except Exception as e:
+        error_str = str(e)
+        if "429" in error_str:
+            print("   ⏳ Groq rate limited. Will try Gemini...")
+        else:
+            print(f"   ❌ Groq error: {e}")
+        return None
+
+
+# ============================================================
+# GEMINI (Fallback)
+# ============================================================
+
+def _rewrite_with_gemini(raw_text):
+    """
+    Rewrite using Google Gemini API (fallback).
+    Includes retry logic for rate limits.
+    """
+    try:
+        from google import genai
+    except ImportError:
+        print("   ⚠️  Google GenAI package not installed.")
+        return None
+
+    api_key = _load_key_from_env(GEMINI_API_KEY_ENV)
+    if not api_key:
+        # Don't prompt if we already tried Groq — just skip
+        return None
+
+    models = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
+    client = genai.Client(api_key=api_key)
+
+    for model in models:
+        for attempt in range(2):  # 2 attempts per model
             try:
-                print(f"\n   🤖 Rewriting with AI ({model})...")
+                print(f"\n   🤖 Trying Gemini ({model})...")
 
                 response = client.models.generate_content(
                     model=model,
-                    contents=prompt,
+                    contents=USER_PROMPT.format(raw_text=raw_text),
                     config={
                         "system_instruction": SYSTEM_PROMPT,
                         "temperature": 0.7,
@@ -137,49 +192,64 @@ Generate ONLY the post content, nothing else. No explanations or meta-text."""
                 if response and response.text:
                     result = response.text.strip()
                     result = clean_post(result)
-                    print("   ✅ AI rewrite complete!")
+                    print("   ✅ AI rewrite complete! (via Gemini)")
                     return result
-                else:
-                    print("   ❌ Empty response from AI.")
 
             except Exception as e:
-                error_str = str(e)
-                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                    retry_delay = _extract_retry_delay(error_str)
-                    remaining = max_retries - attempt - 1
-
-                    if remaining > 0 or model != GEMINI_MODELS[-1]:
-                        print(f"   ⏳ Rate limited. Waiting {int(retry_delay)}s before retry...")
-                        print(f"      (Attempt {attempt + 1}/{max_retries} for {model})")
-
-                        # Countdown timer
-                        for sec in range(int(retry_delay), 0, -1):
-                            print(f"\r   ⏳ Retrying in {sec}s...  ", end="", flush=True)
-                            time.sleep(1)
-                        print()
+                if "429" in str(e):
+                    retry_delay = _extract_retry_delay(str(e))
+                    if attempt == 0 and retry_delay <= 30:
+                        print(f"   ⏳ Waiting {int(retry_delay)}s...")
+                        time.sleep(retry_delay)
                         continue
-                    else:
-                        # Try next model
-                        print(f"   ⚠️  {model} quota exhausted. Trying next model...")
-                        break
+                    break  # Try next model
                 else:
-                    print(f"   ❌ AI rewrite failed: {e}")
+                    print(f"   ❌ Gemini error: {e}")
                     return None
 
-    print("   ❌ All models exhausted. Could not rewrite with AI.")
     return None
 
 
-def clean_post(content):
+# ============================================================
+# Main entry point
+# ============================================================
+
+def rewrite_with_ai(raw_text):
     """
-    Clean up AI-generated post content.
+    Rewrite raw text into a polished GFG Connect post.
+    Tries Groq first (fast+free), falls back to Gemini.
 
     Args:
-        content: Raw AI output
+        raw_text: The raw text from voice/manual input
 
     Returns:
-        str: Cleaned content ready for posting
+        str: The AI-rewritten post content, or None if all providers fail
     """
+    # Try Groq first (fast, reliable free tier)
+    result = _rewrite_with_groq(raw_text)
+    if result:
+        return result
+
+    # Fallback to Gemini
+    print("\n   🔄 Trying Gemini as fallback...")
+    result = _rewrite_with_gemini(raw_text)
+    if result:
+        return result
+
+    print("\n   ❌ All AI providers failed.")
+    return None
+
+
+def _extract_retry_delay(error_msg):
+    """Extract retry delay from error message."""
+    match = re.search(r"retry in (\d+\.?\d*)s", str(error_msg))
+    if match:
+        return float(match.group(1))
+    return 30
+
+
+def clean_post(content):
+    """Clean up AI-generated post content."""
     if not content:
         return None
 
@@ -194,7 +264,7 @@ def clean_post(content):
         lines = content.split("\n")
         content = "\n".join(lines[1:-1]).strip()
 
-    # Remove markdown bold markers
+    # Remove markdown formatting
     content = content.replace("**", "")
     content = content.replace("##", "")
     content = content.replace("# ", "")

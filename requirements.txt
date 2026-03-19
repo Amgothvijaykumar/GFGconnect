@@ -3,3 +3,4 @@ pyperclip
 SpeechRecognition
 PyAudio
 google-genai
+groq
