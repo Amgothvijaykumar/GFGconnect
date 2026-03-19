@@ -40,14 +40,19 @@ class GFGBrowser:
         log_info("Launching browser...")
         os.makedirs(SESSION_DIR, exist_ok=True)
 
-        # Clean up stale lock file from crashed/suspended sessions
-        lock_file = os.path.join(SESSION_DIR, "SingletonLock")
-        if os.path.exists(lock_file):
-            try:
-                os.remove(lock_file)
-                log_info("Removed stale browser lock file.")
-            except OSError:
-                pass
+        # Kill any stale "Chrome for Testing" processes from previous runs
+        self._cleanup_stale_processes()
+
+        # Clean up ALL singleton files from crashed/suspended sessions
+        singleton_files = ["SingletonLock", "SingletonSocket", "SingletonCookie"]
+        for fname in singleton_files:
+            fpath = os.path.join(SESSION_DIR, fname)
+            if os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                    log_info(f"Removed stale {fname}.")
+                except OSError:
+                    pass
 
         self.playwright = sync_playwright().start()
         self.context = self.playwright.chromium.launch_persistent_context(
@@ -59,6 +64,21 @@ class GFGBrowser:
         self.page = self.context.new_page()
         log_success("Browser launched successfully.")
         return self.page
+
+    def _cleanup_stale_processes(self):
+        """Kill any stale Chrome for Testing processes from previous runs."""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["pkill", "-9", "-f", "Google Chrome for Testing"],
+                capture_output=True, timeout=5
+            )
+            if result.returncode == 0:
+                log_info("Killed stale Chrome processes.")
+                import time
+                time.sleep(1)  # Give OS time to release the lock
+        except Exception:
+            pass
 
     def navigate_to_gfg_connect(self):
         """Navigate to GFG Connect explore page."""
