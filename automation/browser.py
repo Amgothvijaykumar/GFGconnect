@@ -286,6 +286,144 @@ class GFGBrowser:
             log_error(f"Login failed: {e}")
             return False
 
+    def login_with_credentials(self, email: str, password: str) -> bool:
+        """
+        Automate login using provided email and password credentials.
+        Designed for programmatic/API usage.
+
+        Args:
+            email: User's email or username
+            password: User's password
+
+        Returns:
+            bool: True if login was successful
+        """
+        if not email or not password:
+            log_error("Email and password cannot be empty.")
+            return False
+
+        try:
+            # Dismiss cookie banner first
+            self._dismiss_cookie_banner()
+
+            # Click the "Sign In" button on GFG Connect page to open modal
+            log_info("Opening login modal...")
+
+            sign_in_selectors = [
+                'button.signinButton.login-modal-btn',
+                'button.signinButton',
+                'button:has-text("Sign In")',
+                'text="Sign In"',
+            ]
+
+            sign_in_btn = None
+            for selector in sign_in_selectors:
+                try:
+                    sign_in_btn = self.page.wait_for_selector(selector, timeout=3000)
+                    if sign_in_btn:
+                        break
+                except Exception:
+                    continue
+
+            if sign_in_btn:
+                sign_in_btn.click()
+                self.page.wait_for_timeout(2000)
+                log_info("Login modal opened.")
+            else:
+                log_warning("Could not find Sign In button, trying direct auth page...")
+                self.page.goto(GFG_LOGIN_URL, wait_until="networkidle")
+                self.page.wait_for_timeout(2000)
+
+            # Fill email/username
+            log_info("Entering email/username...")
+            email_field = None
+            email_selectors = [
+                'input.loginInput[placeholder="Username or Email"]',
+                'input[placeholder="Username or Email"]',
+                'input[placeholder="Username or email"]',
+                'input#luser',
+                'input[type="text"]',
+            ]
+            for selector in email_selectors:
+                try:
+                    email_field = self.page.wait_for_selector(selector, timeout=3000)
+                    if email_field:
+                        break
+                except Exception:
+                    continue
+
+            if not email_field:
+                log_error("Could not find email/username field.")
+                return False
+
+            email_field.click()
+            self.page.wait_for_timeout(300)
+            email_field.fill(email)
+            log_success("Email/username entered.")
+
+            # Fill password
+            log_info("Entering password...")
+            password_field = None
+            password_selectors = [
+                'input.loginInput[placeholder="Enter password"]',
+                'input[placeholder="Enter password"]',
+                'input[placeholder="Password"]',
+                'input#password',
+                'input[type="password"]',
+            ]
+            for selector in password_selectors:
+                try:
+                    password_field = self.page.wait_for_selector(selector, timeout=3000)
+                    if password_field:
+                        break
+                except Exception:
+                    continue
+
+            if not password_field:
+                log_error("Could not find password field.")
+                return False
+
+            password_field.click()
+            self.page.wait_for_timeout(300)
+            password_field.fill(password)
+            log_success("Password entered.")
+
+            # Click Sign In button
+            log_info("Clicking Sign In...")
+            login_btn = None
+            login_selectors = [
+                'button:has-text("Sign In")',
+                'button.loginBtn',
+                'button[type="submit"]',
+            ]
+            for selector in login_selectors:
+                try:
+                    login_btn = self.page.wait_for_selector(selector, timeout=3000)
+                    if login_btn:
+                        break
+                except Exception:
+                    continue
+
+            if login_btn:
+                login_btn.click()
+            else:
+                log_warning("Could not find Sign In button, trying keyboard.")
+                self.page.press('input[type="password"]', 'Enter')
+
+            # Wait for login to complete
+            self.page.wait_for_timeout(3000)
+
+            if self.check_login_status():
+                log_success("Login successful! 🎉")
+                return True
+            else:
+                log_error("Login check failed after submission.")
+                return False
+
+        except Exception as e:
+            log_error(f"Login with credentials failed: {e}")
+            return False
+
     def wait_for_manual_login(self):
         """Wait for user to manually log in (fallback method)."""
         print("\n" + "=" * 60)

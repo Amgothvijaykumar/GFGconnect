@@ -46,13 +46,14 @@ def log_warning(message):
     logger.warning(f"⚠️  {message}")
 
 
-def save_post_history(content, status="posted"):
+def save_post_history(content, status="posted", platform=None):
     """
     Save post content to history for tracking.
 
     Args:
         content: The post content
         status: 'posted', 'draft', or 'failed'
+        platform: 'gfg', 'linkedin', 'twitter' (optional)
     """
     history_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "history")
     os.makedirs(history_dir, exist_ok=True)
@@ -62,10 +63,12 @@ def save_post_history(content, status="posted"):
     filepath = os.path.join(history_dir, filename)
 
     with open(filepath, "w") as f:
-        f.write(f"# GFG Connect Post - {status.upper()}\n")
+        f.write(f"# {platform.upper() if platform else 'GFG Connect'} Post - {status.upper()}\n")
         f.write(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"**Status:** {status}\n\n")
-        f.write("---\n\n")
+        f.write(f"**Status:** {status}\n")
+        if platform:
+            f.write(f"**Platform:** {platform}\n")
+        f.write("\n---\n\n")
         f.write(content)
 
     log_info(f"Post saved to history: {filename}")

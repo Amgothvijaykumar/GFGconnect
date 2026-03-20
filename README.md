@@ -55,6 +55,33 @@ python main.py --clipboard
 python main.py --prompt-only
 ```
 
+## 🌐 Web + Mobile Control (React + API)
+
+Use this mode to manage rewrite/post/history from your phone browser.
+
+### 1. Start backend API
+```bash
+pip install -r requirements.txt
+uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 2. Start React frontend
+```bash
+cd frontend
+npm install
+npm run dev -- --host 0.0.0.0 --port 5173
+```
+
+### 3. Open from mobile
+- Ensure mobile and laptop are on same Wi-Fi.
+- Open: `http://<your-laptop-local-ip>:5173`
+
+API endpoints added:
+- `GET /api/health`
+- `POST /api/rewrite`
+- `POST /api/post`
+- `GET /api/history?limit=30`
+
 ### 3. Usage Flow
 1. **Speak** your learning using voice dictation
 2. **Run** the script — it captures your text

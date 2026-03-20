@@ -9,7 +9,7 @@ import threading
 import sys
 
 
-def get_voice_input():
+def get_voice_input(start_timeout_seconds=120, phrase_time_limit_seconds=300):
     """
     Capture voice input using the microphone and convert to text.
     Uses Google's free Speech-to-Text API.
@@ -29,6 +29,7 @@ def get_voice_input():
     print("-" * 40)
     print("🔊 Speak clearly into your microphone.")
     print("   The system will listen until you pause for 3+ seconds.")
+    print(f"   Start timeout: {start_timeout_seconds}s | Max phrase: {phrase_time_limit_seconds}s")
     print("   Press Ctrl+C to stop early.\n")
 
     try:
@@ -49,8 +50,8 @@ def get_voice_input():
             # Listen without strict timeout — wait for user to finish naturally
             audio = recognizer.listen(
                 source,
-                timeout=120,           # Max 2 minutes to START speaking
-                phrase_time_limit=300,  # Max 5 minutes per phrase
+                timeout=start_timeout_seconds,
+                phrase_time_limit=phrase_time_limit_seconds,
             )
 
             stop_indicator.set()
@@ -67,7 +68,7 @@ def get_voice_input():
             return None
 
     except sr.WaitTimeoutError:
-        print("\n   ⏰ Timeout — no speech detected in 2 minutes.")
+        print(f"\n   ⏰ Timeout — no speech detected in {start_timeout_seconds} seconds.")
         return None
     except sr.UnknownValueError:
         print("\n   ❌ Could not understand the audio. Try speaking more clearly.")

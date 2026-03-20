@@ -4,3 +4,5 @@ SpeechRecognition
 PyAudio
 google-genai
 groq
+fastapi
+uvicorn
