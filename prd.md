@@ -1,236 +1,110 @@
-# 📌 Product Requirements Document (PRD)
-
-## 🧠 Product Title
-Voice-to-GFG Connect Auto Posting System
-
----
-
-## 🎯 Objective
-Build a cost-free automation system that allows a user to:
-- Speak their daily learning
-- Convert it into a structured post
-- Review and confirm
-- Automatically publish on GFG Connect
-
----
-
-## 👤 Target User
-- Student (AIML / CS)
-- Regularly posts learning updates
-- Wants consistency without spending time on manual posting
-
----
-
-## 🚀 Problem Statement
-Posting daily updates requires:
-- Writing effort
-- Editing
-- Navigating website manually
-
-This leads to:
-- Inconsistency
-- Time waste
-- Reduced productivity
-
----
-
-## 💡 Solution Overview
-A hybrid system combining:
-- Voice input
-- AI-assisted writing
-- Browser automation
-
----
-
-## 🔄 User Flow
-
-1. User speaks learning via mic
-2. Speech is converted to text
-3. AI rewrites into structured post
-4. User reviews generated post
-5. System asks for confirmation
-6. On approval → auto posts to GFG Connect
-
----
-
-## 🏗️ System Architecture
-
-Voice Input
-   ↓
-Speech-to-Text (Local / OS)
-   ↓
-AI Writing (ChatGPT - manual/free)
-   ↓
-Python Script (Playwright)
-   ↓
-Browser Automation
-   ↓
-GFG Connect Post Submission
-
----
-
-## 🧩 Core Components
-
-### 1. Voice Input
-- Tool: Gboard / Windows Dictation
-- Output: Raw text
-
----
-
-### 2. AI Writing Module
-- Tool: ChatGPT (Free usage)
-- Input: Raw text
-- Output: Clean formatted post
-
----
-
-### 3. Automation Engine
-- Tool: Playwright (Python)
-- Responsibilities:
-  - Open browser
-  - Navigate to GFG Connect
-  - Fill post content
-  - Submit post
-
----
-
-### 4. Confirmation Layer
-- CLI-based input:
-  Do you want to post? (yes/no)
-
----
-
-## ⚙️ Functional Requirements
-
-### FR1: Voice Input
-- System should accept spoken input
-- Convert to editable text
-
----
-
-### FR2: Content Generation
-- System should convert raw text into:
-  - Structured
-  - Grammatically correct
-  - Short post
-
----
-
-### FR3: User Confirmation
-- System must display generated content
-- Ask for approval before posting
-
----
-
-### FR4: Automated Posting
-- System should:
-  - Open browser
-  - Navigate to GFG Connect
-  - Paste content
-  - Click post button
-
----
-
-### FR5: Manual Login Support
-- User logs in manually once
-- Session should persist
-
----
-
-## ⚠️ Non-Functional Requirements
-
-### NFR1: Cost
-- Must be completely free
-- No paid APIs
-
----
-
-### NFR2: Reliability
-- Must work consistently daily
-- Should not depend on unstable AI agents
-
----
-
-### NFR3: Usability
-- Simple workflow
-- Minimal steps
-
----
-
-### NFR4: Performance
-- Posting should complete within 10–20 seconds
-
----
-
-## 🛠️ Tech Stack
-
-| Component | Tool |
-|----------|------|
-| Speech Input | Gboard / Windows Voice |
-| AI Writing | ChatGPT (manual/free) |
-| Automation | Playwright (Python) |
-| UI | CLI (initial version) |
-
----
-
-## 📉 Limitations
-
-- No direct API for GFG Connect
-- Requires browser automation
-- UI changes in website may break script
-- Voice accuracy depends on device
-
----
-
-## 🔮 Future Enhancements
-
-- Auto voice-to-text integration (Whisper local)
-- GUI interface (Tkinter)
-- Auto login session handling
-- One-click execution
-- Scheduled posting
-- Multi-platform posting (LinkedIn, Twitter)
-
----
-
-## 📊 Success Metrics
-
-- Daily posting consistency (≥ 90%)
-- Time saved per post (> 70%)
-- Zero manual typing effort
-- Successful post rate (> 95%)
-
----
-
-## 🧪 MVP Scope
-
-Include:
-- Manual voice → text
-- ChatGPT rewriting
-- Playwright posting
-- Confirmation step
-
-Exclude:
-- Full AI agent automation
-- Paid APIs
-- Multi-platform posting
-
----
-
-## 🧠 Key Design Decision
-
-Avoid:
-- Over-engineering
-- Unstable AI agents
-
-Focus on:
-- Simplicity
-- Reliability
-- Zero cost
-
----
-
-## ✅ Final Outcome
-
-A lightweight system that enables:
-👉 “Speak → Review → Post” in under 1 minute
+# Product Requirements Document (PRD)
+
+## Product Title
+GFG Connect Web Posting Assistant (Voice + AI + Automation)
+
+## Objective
+Provide a reliable, low-friction system to create and publish learning posts with:
+- text or voice input,
+- AI rewrite and review,
+- one-tap posting via browser automation,
+- history tracking and cleanup.
+
+## Target Users
+- Students and developers posting regular learning updates.
+- Users who want to post from mobile or desktop without manually navigating every step.
+
+## Problem Statement
+Manual posting is repetitive and inconsistent:
+- users type/rewrite the same type of content daily,
+- website navigation and posting consume time,
+- session/login state variations make automation brittle.
+
+## Current Solution (Implemented)
+The product now runs as a web app with API backend:
+1. User enters raw text or taps Speak (backend microphone capture).
+2. System rewrites content using AI provider integration.
+3. User edits preview.
+4. User posts to selected platform (GFG, LinkedIn, Twitter/X).
+5. System stores post history as markdown files.
+6. User can view, delete one history item, or clear all history.
+
+## Architecture
+Frontend (React, Vite)
+-> Backend API (FastAPI)
+-> Processing (AI rewrite)
+-> Automation (Playwright browsers)
+-> Target platform web UI (GFG/LinkedIn/Twitter)
+
+## Core Components
+
+### Frontend
+- Compose and History tabs
+- Platform selector
+- Login modal (per platform credentials stored locally)
+- Voice trigger button with listening state
+- History delete controls
+
+### Backend API
+- `GET /api/health`
+- `POST /api/rewrite`
+- `POST /api/listen`
+- `POST /api/post`
+- `GET /api/history`
+- `DELETE /api/history/{filename}`
+- `DELETE /api/history`
+
+### Automation Layer
+- `automation/browser.py` for GFG Connect
+- `automation/linkedin.py` for LinkedIn
+- `automation/twitter.py` for Twitter/X
+
+## Functional Requirements
+
+### FR1 Input
+- Accept typed input.
+- Accept voice input through backend microphone capture endpoint.
+
+### FR2 Rewrite
+- Convert raw input into concise, readable post format.
+- Allow user to manually edit final preview.
+
+### FR3 Posting
+- Post to selected platform from the same UI.
+- Reuse cached sessions when available.
+
+### FR4 Login and Session Handling
+- Support explicit credential login flow.
+- Avoid unnecessary re-login when session is already active.
+
+### FR5 History Management
+- Persist post attempts in local markdown files.
+- Show recent history in frontend.
+- Support single-item delete and clear-all delete.
+
+## Non-Functional Requirements
+- Reliability: tolerate UI variations with robust selector fallbacks.
+- Cost: avoid paid dependencies when possible.
+- Usability: mobile-friendly UI and minimal posting steps.
+- Maintainability: modular Python packages and simple API contracts.
+
+## Known Constraints
+- No official posting API from target platforms; browser automation is required.
+- LinkedIn/Twitter verification challenges may require manual intervention.
+- Platform UI updates can break selectors and need maintenance.
+
+## Success Criteria
+- Users can complete create -> rewrite -> post workflow from web UI.
+- GFG posting works reliably with cached-session and login-required scenarios.
+- History management works end-to-end (read/delete/clear).
+- Frontend is usable from local network mobile access.
+
+## Out of Scope (Current Release)
+- Background scheduler/queueing for timed posts.
+- Enterprise-grade credential vault.
+- Full autonomous retry orchestration for all platform failures.
+
+## Next Milestones
+1. Add retry/backoff and screenshot capture on failure.
+2. Harden LinkedIn/Twitter flows for challenge handling UX.
+3. Add filtered history by platform/status.

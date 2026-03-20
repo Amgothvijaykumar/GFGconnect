@@ -1,202 +1,101 @@
-# ⚙️ Tech Rules Document (techrules.md)
+# Tech Rules (techrules.md)
 
-## 📌 Project Title
-Voice-to-GFG Connect Auto Posting System
+## Project
+GFG Connect Web Posting Assistant
 
----
+## Purpose
+Define implementation rules for a reliable web + API + browser-automation workflow.
 
-## 🎯 Purpose
-Define a consistent, scalable, and cost-effective technology stack and development rules for the project.
+## Core Principles
+- Reliability over feature count.
+- Prefer explicit fallbacks for unstable website selectors.
+- Keep architecture modular and debuggable.
+- Treat runtime artifacts (history/logs/session/cache) as non-source data.
 
----
+## Current Stack (Authoritative)
 
-## 🧠 Core Principles
+### Frontend
+- React + Vite
+- Mobile-friendly CSS
+- API-driven workflow
 
-- ✅ Zero-cost / minimal-cost tools
-- ✅ Reliability over hype
-- ✅ Simplicity first, then automation
-- ✅ Modular architecture (each component independent)
-- ✅ Easy debugging and maintenance
+### Backend
+- FastAPI + Pydantic
+- REST endpoints for rewrite/listen/post/history
 
----
+### Automation
+- Playwright (Python)
+- Platform modules:
+  - `automation/browser.py` (GFG)
+  - `automation/linkedin.py`
+  - `automation/twitter.py`
 
-## 🏗️ Architecture Overview
+### Processing and Input
+- AI rewrite module in `processing/`
+- Voice and text input helpers in `input/`
 
-Voice Input → Text Processing → AI Formatting → Automation Engine → Browser Execution
+### Runtime Storage
+- Post history files: `history/*.md`
+- Browser session cache: `browser_data/` (local runtime only)
 
----
+## Repository Rules
 
-## 🧩 Tech Stack (Finalized)
+### Rule 1: Keep Runtime Data Out of Git
+- Do not commit session files, logs, cache, or generated history markdown.
+- `.gitignore` must include `.venv/`, `venv/`, `history/*.md`, `browser_data/`, logs and caches.
 
-### 1. Input Layer (Voice → Text)
+### Rule 2: API Contract Stability
+- Changes to request/response models must be backward compatible when possible.
+- Any endpoint behavior change must be reflected in frontend logic.
 
-| Component | Tool | Reason |
-|----------|------|--------|
-| Speech Input | Gboard / Windows Dictation | Free, accurate, no setup |
-| Optional Upgrade | Whisper (local) | Offline capability |
+### Rule 3: Automation Robustness First
+- Always use selector fallback arrays for critical actions.
+- Verify session state before triggering login.
+- Avoid hard dependency on a single UI structure.
 
----
+### Rule 4: Error Handling Standards
+- Return actionable HTTP errors from API.
+- Preserve post history status (`posted`, `failed`, `draft`, `cancelled`) for traceability.
+- Never swallow exceptions silently in automation layer.
 
-### 2. Processing Layer (Text → Structured Post)
+### Rule 5: Security and Credentials
+- Never hardcode credentials in source.
+- Current UI stores credentials in browser localStorage for convenience; treat as non-production security posture.
+- Future production path should move to secure credential storage or token-based flow.
 
-| Component | Tool | Reason |
-|----------|------|--------|
-| AI Writing | ChatGPT (Free) | No API cost |
-| Prompt Templates | Custom prompts | Ensures consistency |
+### Rule 6: Frontend UX Consistency
+- Keep compose flow simple: input -> rewrite -> edit -> post.
+- Keep history actions synchronized with backend state.
+- Use clear status messages for long-running actions (listen/post/delete).
 
----
+### Rule 7: Validation Before Push
+- Python files must pass `py_compile` checks.
+- Frontend must pass `npm run build`.
+- If backend routes change, verify via `/openapi.json` or endpoint checks.
 
-### 3. Automation Layer (Core Engine)
-
-| Component | Tool | Reason |
-|----------|------|--------|
-| Language | Python | Simple + powerful |
-| Automation Framework | Playwright | More reliable than Selenium |
-| Package Manager | pip | Standard |
-
----
-
-### 4. Browser Control
-
-| Component | Tool | Reason |
-|----------|------|--------|
-| Browser | Chromium (via Playwright) | Fast + stable |
-| Mode | Headed (headless=False) | Debug visibility |
-
----
-
-### 5. Interface Layer
-
-| Component | Tool | Reason |
-|----------|------|--------|
-| CLI | Python input/output | Simple MVP |
-| Optional GUI | Tkinter | Lightweight GUI |
-
----
-
-### 6. Data Handling
-
-| Component | Tool | Reason |
-|----------|------|--------|
-| Clipboard | pyperclip | Fast text transfer |
-| Storage | Local files (.txt/.md) | No DB needed initially |
-
----
-
-## ⚙️ Development Rules
-
-### Rule 1: Avoid Paid APIs
-- No dependency on paid services
-- Ensure full functionality without subscriptions
-
----
-
-### Rule 2: Modular Code Structure
+## Architecture Layout (Current)
 
 ```
-project/
-│
-├── input/
-├── processing/
-├── automation/
-├── utils/
-└── main.py
+api/
+automation/
+frontend/
+input/
+processing/
+utils/
+main.py
 ```
 
----
+## Operational Guidance
+- Start backend with virtualenv: `python -m uvicorn api.server:app --host 0.0.0.0 --port 8000 --reload`
+- Run frontend dev server from `frontend/`.
+- For mobile testing, use same LAN and backend host IP.
 
-### Rule 3: Keep Automation Stable
-- Use Playwright selectors carefully
-- Avoid dynamic selectors
-- Re-test after UI changes
+## Known Technical Risks
+- Platform login challenge/verification can interrupt automation.
+- Site UI changes may break selectors.
+- Voice endpoint uses backend machine microphone, not remote client microphone.
 
----
-
-### Rule 4: Manual Checkpoint (Mandatory)
-- Always include confirmation before posting
-- Prevent accidental posts
-
----
-
-### Rule 5: Logging
-
-- Log:
-  - Errors
-  - Posting success/failure
-- Use simple logging (print / logging module)
-
----
-
-### Rule 6: Session Handling
-
-- Do not automate login initially
-- Use persistent browser session
-- Upgrade later if needed
-
----
-
-## 🔐 Security Considerations
-
-- Do not store credentials in code
-- Avoid hardcoding sensitive data
-- Use manual login for MVP
-
----
-
-## 📈 Scalability Plan
-
-### Phase 1 (MVP)
-- CLI-based
-- Manual AI + automation
-
----
-
-### Phase 2
-- Add GUI
-- Add clipboard automation
-
----
-
-### Phase 3
-- Multi-platform posting (LinkedIn, etc.)
-- Scheduling system
-
----
-
-### Phase 4 (Advanced)
-- Local AI (offline)
-- Fully automated pipeline
-
----
-
-## 🚫 Tech to Avoid (for now)
-
-- ❌ Full AI agents (unstable)
-- ❌ Complex frameworks (overkill)
-- ❌ Paid APIs
-- ❌ Heavy frontend frameworks (React, Angular)
-
----
-
-## ✅ Final Stack Summary
-
-- Python + Playwright (core)
-- ChatGPT (manual AI)
-- OS Voice Input
-- CLI Interface
-
----
-
-## 🧠 Key Philosophy
-
-> Build something that works daily, not something that looks impressive but breaks.
-
----
-
-## 🎯 Outcome
-
-A system that is:
-- Reliable
-- Maintainable
-- Cost-free
-- Scalable step-by-step
+## Next Technical Priorities
+1. Add retry/backoff wrappers for fragile browser actions.
+2. Add screenshot-on-failure for faster selector debugging.
+3. Improve secure credential strategy for multi-user scenarios.

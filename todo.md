@@ -1,209 +1,81 @@
-# 📝 TODO.md
-
-## 📌 Project: Voice-to-GFG Connect Auto Posting System
-
----
-
-## 🎯 Goal
-Break down the project into manageable, feature-specific tasks to ensure systematic development.
-
----
-
-# 🧩 Phase 1: Foundation Setup
-
-## 🔹 Task 1: Environment Setup
-- [x] Install Python
-- [x] Install Playwright
-- [x] Setup virtual environment
-- [x] Verify Playwright installation
-
----
-
-## 🔹 Task 2: Project Structure
-- [x] Create project folders:
-  - input/
-  - processing/
-  - automation/
-  - utils/
-- [x] Create main.py
-- [x] Setup basic script execution
-
----
-
-# 🧩 Phase 2: Input System
-
-## 🔹 Task 3: Voice Input
-- [x] Test Gboard / Windows voice typing
-- [x] Capture spoken text
-- [x] Copy text manually
-
----
-
-## 🔹 Task 4: Clipboard Integration (Optional)
-- [x] Install pyperclip
-- [x] Read text from clipboard
-- [x] Validate input handling
-
----
-
-# 🧩 Phase 3: AI Processing
-
-## 🔹 Task 5: Prompt Design
-- [x] Create standard prompt template
-- [x] Test multiple variations
-- [x] Finalize best prompt
-
----
-
-## 🔹 Task 6: Content Formatting
-- [x] Ensure:
-  - Proper grammar
-  - Short format
-  - Readable structure
-
----
-
-# 🧩 Phase 4: Core Automation
-
-## 🔹 Task 7: Playwright Basics
-- [x] Launch browser
-- [x] Open GFG Connect
-- [x] Understand page structure
-
----
-
-## 🔹 Task 8: Selector Identification
-- [x] Inspect post input field
-- [x] Identify textarea selector
-- [x] Identify post button selector
-
----
-
-## 🔹 Task 9: Fill Content
-- [x] Automate text input
-- [x] Test content insertion
-
----
-
-## 🔹 Task 10: Submit Post
-- [x] Automate post button click
-- [x] Validate successful submission
-
----
-
-# 🧩 Phase 5: Confirmation System
-
-## 🔹 Task 11: CLI Confirmation
-- [x] Display generated content
-- [x] Ask:
-  - "Do you want to post? (yes/no)"
-- [x] Handle user response
-
----
-
-# 🧩 Phase 6: Integration
-
-## 🔹 Task 12: End-to-End Flow
-- [x] Voice → Text → AI → Script → Post
-- [x] Test complete pipeline
-- [ ] Fix integration issues (fine-tune after real usage)
-
----
-
-# 🧩 Phase 7: Stability Improvements
-
-## 🔹 Task 13: Session Handling
-- [x] Keep browser session alive
-- [x] Avoid repeated login
-
----
-
-## 🔹 Task 14: Error Handling
-- [x] Handle:
-  - Network errors
-  - Selector failures
-- [ ] Add retry logic (enhance after testing)
-
----
-
-## 🔹 Task 15: Logging
-- [x] Log success/failure
-- [x] Add debug prints
-
----
-
-# 🧩 Phase 8: Usability Improvements
-
-## 🔹 Task 16: Clipboard Automation
-- [x] Auto-read from clipboard
-- [x] Reduce manual steps
-
----
-
-## 🔹 Task 17: UI Upgrade (Optional)
-- [ ] Build simple GUI (Tkinter)
-- [ ] Add buttons:
-  - Paste
-  - Preview
-  - Post
-
----
-
-# 🧩 Phase 9: Testing
-
-## 🔹 Task 18: Test Cases
-- [ ] Short text
-- [ ] Long text
-- [ ] Empty input
-- [ ] Invalid input
-
----
-
-## 🔹 Task 19: Daily Usage Testing
-- [ ] Use for real daily posts
-- [ ] Track failures
-- [ ] Improve reliability
-
----
-
-# 🧩 Phase 10: Future Enhancements
-
-## 🔹 Task 20: Multi-platform Support
-- [ ] Extend to LinkedIn
-- [ ] Extend to Twitter
-
----
-
-## 🔹 Task 21: Scheduling
-- [ ] Add timed posting
-- [ ] Background execution
-
----
-
-## 🔹 Task 22: Full Automation
-- [ ] Integrate voice-to-text automatically
-- [ ] Remove manual steps
-
----
-
-# ✅ Definition of Done
-
-- [ ] End-to-end system works
-- [ ] Posting takes < 1 minute
-- [ ] No manual typing required
-- [ ] Reliable for daily use
-
----
-
-# 🧠 Development Strategy
-
-- Focus on one task at a time
-- Complete → Test → Move next
-- Avoid jumping between features
-
----
-
-# 🚀 Final Outcome
-
-A consistent, reliable system that enables:
-👉 Speak → Review → Post (automatically)
+# TODO.md
+
+## Project
+Voice-to-GFG Connect Auto Posting System (now Web + API based)
+
+## Current Status
+- Core system is working end-to-end with FastAPI backend + React frontend.
+- GFG posting flow is stable with session-aware login and robust editor detection.
+- LinkedIn and Twitter posting modules are added (verification/challenge behavior still depends on platform security checks).
+
+## Completed
+
+### Foundation
+- [x] Python project structure (`input/`, `processing/`, `automation/`, `utils/`)
+- [x] Playwright automation baseline
+- [x] Virtual environment setup
+
+### Input and AI Processing
+- [x] CLI text input
+- [x] Voice input pipeline in backend (`input/text_input.py`)
+- [x] Clipboard input support
+- [x] AI rewrite integration (`processing/content.py`)
+
+### Web/API Platform
+- [x] FastAPI server (`api/server.py`)
+- [x] React frontend (`frontend/`)
+- [x] Mobile-friendly UI (compose/history/login)
+- [x] CORS support for local network usage
+- [x] Health endpoint (`/api/health`)
+- [x] Rewrite endpoint (`/api/rewrite`)
+- [x] Listen endpoint (`/api/listen`)
+- [x] Post endpoint (`/api/post`)
+- [x] History read endpoint (`/api/history`)
+- [x] History delete endpoints (`DELETE /api/history/{filename}`, `DELETE /api/history`)
+
+### Posting and Reliability
+- [x] Session-aware GFG login behavior (avoid forced re-login when already authenticated)
+- [x] Improved GFG composer/editor detection across UI variants
+- [x] Robust post fill + submit flow
+- [x] Post history save/read/delete support
+
+### Multi-platform
+- [x] Platform selector in UI
+- [x] LinkedIn automation module (`automation/linkedin.py`)
+- [x] Twitter/X automation module (`automation/twitter.py`)
+
+## In Progress / Needs Real-World Validation
+- [ ] Daily usage validation over multiple days
+- [ ] Selector stability checks after site UI changes
+- [ ] LinkedIn/Twitter challenge/verification handling UX improvements
+
+## Pending Work
+
+### Testing
+- [ ] Add repeatable test checklist for:
+  - short input
+  - long input
+  - empty input
+  - invalid input
+  - login-required scenario
+  - cached-session scenario
+
+### Reliability Enhancements
+- [ ] Add retry/backoff strategy for recoverable browser actions
+- [ ] Add optional screenshot capture on automation failures
+- [ ] Improve structured error responses for frontend display
+
+### Product Enhancements
+- [ ] Add optional scheduling for queued posts
+- [ ] Add per-platform history filters in UI
+- [ ] Add secure credential management strategy (avoid plain localStorage)
+
+## Definition of Done (Updated)
+- [x] End-to-end workflow functional (input -> rewrite -> post)
+- [x] Web UI usable on desktop and mobile
+- [x] History management supports read + delete
+- [ ] Production-hardening complete (retry + advanced logging + long-run reliability)
+
+## Notes
+- Tkinter desktop UI path is intentionally dropped in favor of React + FastAPI.
+- `history/*.md` is runtime data and is ignored by git.
