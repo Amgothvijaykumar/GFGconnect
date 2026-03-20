@@ -57,6 +57,12 @@ class HistoryItem(BaseModel):
     content: str
 
 
+class DeleteHistoryResponse(BaseModel):
+    status: str
+    message: str
+    deleted_count: int = 0
+
+
 app = FastAPI(title="GFG Connect API", version="0.1.0")
 
 app.add_middleware(
@@ -124,17 +130,17 @@ def publish_post(payload: PostRequest):
         if payload.platform == "gfg":
             browser.navigate_to_gfg_connect()
 
-            # If credentials provided, use them for login
-            if payload.email and payload.password:
-                if not browser.login_with_credentials(payload.email, payload.password):
-                    save_post_history(payload.content, status="draft", platform=payload.platform)
-                    return PostResponse(
-                        status="login_failed",
-                        message="Login failed with provided credentials.",
-                    )
-            else:
-                # Check if already logged in, otherwise prompt for manual login
-                if not browser.check_login_status():
+            # Respect cached session first. Only attempt credential login when required.
+            already_logged_in = browser.check_login_status()
+            if not already_logged_in:
+                if payload.email and payload.password:
+                    if not browser.login_with_credentials(payload.email, payload.password):
+                        save_post_history(payload.content, status="draft", platform=payload.platform)
+                        return PostResponse(
+                            status="login_failed",
+                            message="Login failed with provided credentials.",
+                        )
+                else:
                     save_post_history(payload.content, status="draft", platform=payload.platform)
                     return PostResponse(
                         status="login_required",
@@ -216,6 +222,46 @@ def get_history(limit: int = 20):
         )
 
     return entries
+
+
+@app.delete("/api/history/{filename}", response_model=DeleteHistoryResponse)
+def delete_history_item(filename: str):
+    if not filename.endswith(".md"):
+        raise HTTPException(status_code=400, detail="Only markdown history files are allowed")
+
+    target = (HISTORY_DIR / filename).resolve()
+    history_root = HISTORY_DIR.resolve()
+
+    # Prevent path traversal outside the history directory.
+    if history_root not in target.parents:
+        raise HTTPException(status_code=400, detail="Invalid history filename")
+
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="History item not found")
+
+    target.unlink()
+    return DeleteHistoryResponse(
+        status="deleted",
+        message=f"Deleted {filename}",
+        deleted_count=1,
+    )
+
+
+@app.delete("/api/history", response_model=DeleteHistoryResponse)
+def clear_history():
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+
+    deleted = 0
+    for file_path in HISTORY_DIR.glob("*.md"):
+        if file_path.is_file():
+            file_path.unlink()
+            deleted += 1
+
+    return DeleteHistoryResponse(
+        status="deleted",
+        message="History cleared",
+        deleted_count=deleted,
+    )
 
 
 def _extract_status(text: str, fallback: str) -> str:

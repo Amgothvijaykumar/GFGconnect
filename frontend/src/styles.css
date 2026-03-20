@@ -265,6 +265,31 @@ button:disabled {
   white-space: pre-wrap;
 }
 
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.history-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.danger {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.danger:hover {
+  background: #991b1b;
+}
+
+.danger.subtle {
+  padding: 7px 10px;
+  font-size: 0.85rem;
+}
+
 .empty {
   color: var(--muted);
   margin: 0;

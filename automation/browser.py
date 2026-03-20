@@ -473,65 +473,62 @@ class GFGBrowser:
             bool: True if content was filled successfully
         """
         try:
-            # Make sure we're on the home page (where posting is available)
+            # Start from home where composer is usually available.
             current_url = self.page.url
             if "/connect/home" not in current_url:
                 self.navigate_to_home()
 
-            log_info("Looking for 'Share your thoughts' area...")
-
-            # Click on "Share your thoughts." to open the post editor
-            share_selectors = [
-                'text="Share your thoughts."',
-                'div:has-text("Share your thoughts")',
-                '[placeholder*="Share your thoughts"]',
-            ]
-
-            share_area = None
-            for selector in share_selectors:
-                try:
-                    share_area = self.page.wait_for_selector(selector, timeout=5000)
-                    if share_area:
-                        log_info(f"Found share area with: {selector}")
-                        break
-                except Exception:
-                    continue
-
-            if not share_area:
-                log_error("Could not find 'Share your thoughts' area.")
-                return False
-
-            share_area.click()
-            self.page.wait_for_timeout(2000)
-            log_info("Post editor opened.")
-
-            # Find the content-editable textbox
             textbox_selectors = [
                 'div.ContentEditable__root[role="textbox"]',
                 'div[role="textbox"][contenteditable="true"]',
+                'div[contenteditable="true"][data-testid*="editor"]',
+                'div[contenteditable="true"][aria-label*="post" i]',
                 'div[contenteditable="true"]',
                 'div.ContentEditable__root',
             ]
 
-            textbox = None
-            for selector in textbox_selectors:
-                try:
-                    textbox = self.page.wait_for_selector(selector, timeout=5000)
-                    if textbox:
-                        log_info(f"Found textbox with: {selector}")
-                        break
-                except Exception:
-                    continue
+            # First, check if editor is already open (common with cached sessions).
+            textbox = self._find_first_visible(textbox_selectors, timeout=2500)
+
+            if not textbox:
+                log_info("Post editor not open yet. Trying composer triggers...")
+                open_editor_selectors = [
+                    'text="Share your thoughts."',
+                    'text="Share your thoughts"',
+                    'button:has-text("Create")',
+                    'button:has-text("Write")',
+                    '[placeholder*="Share your thoughts"]',
+                    '[aria-label*="Share your thoughts" i]',
+                    'div:has-text("Start a post")',
+                ]
+
+                opener = self._find_first_visible(open_editor_selectors, timeout=5000)
+                if opener:
+                    opener.click()
+                    self.page.wait_for_timeout(1500)
+                    log_info("Composer trigger clicked.")
+
+                # Retry textbox detection after attempting to open editor.
+                textbox = self._find_first_visible(textbox_selectors, timeout=6000)
+
+            if not textbox:
+                # Final fallback: reload home and try once more.
+                log_warning("Composer not found, reloading home and retrying...")
+                self.navigate_to_home()
+                textbox = self._find_first_visible(textbox_selectors, timeout=6000)
 
             if not textbox:
                 log_error("Could not find post textbox. Selectors may need updating.")
                 return False
 
-            # Click on the textbox and type content
+            # Focus editor and clear existing draft text if any.
             textbox.click()
-            self.page.wait_for_timeout(500)
+            self.page.wait_for_timeout(300)
+            self.page.keyboard.press("ControlOrMeta+a")
+            self.page.keyboard.press("Backspace")
+            self.page.wait_for_timeout(100)
 
-            # Use keyboard to type content (contenteditable divs work better with type)
+            # Use keyboard typing for contenteditable reliability.
             self.page.keyboard.type(content, delay=10)
             self.page.wait_for_timeout(1000)
 
@@ -541,6 +538,18 @@ class GFGBrowser:
         except Exception as e:
             log_error(f"Failed to fill post content: {e}")
             return False
+
+    def _find_first_visible(self, selectors, timeout=5000):
+        """Return first visible element found among selectors, otherwise None."""
+        for selector in selectors:
+            try:
+                el = self.page.wait_for_selector(selector, timeout=timeout)
+                if el and el.is_visible():
+                    log_info(f"Matched selector: {selector}")
+                    return el
+            except Exception:
+                continue
+        return None
 
     def submit_post(self):
         """

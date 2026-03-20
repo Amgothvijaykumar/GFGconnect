@@ -5,6 +5,7 @@ node_modules/
 
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -20,7 +21,7 @@ logs/
 *.log
 
 # Post history (optional - you may want to track this)
-# history/
+history/*.md
 
 # Environment variables
 .env

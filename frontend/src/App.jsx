@@ -18,6 +18,8 @@ export default function App() {
   const [loadingRewrite, setLoadingRewrite] = useState(false);
   const [loadingPost, setLoadingPost] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [deletingFilename, setDeletingFilename] = useState("");
+  const [clearingHistory, setClearingHistory] = useState(false);
   const [status, setStatus] = useState("Ready");
 
   const [selectedPlatform, setSelectedPlatform] = useState("gfg");
@@ -60,6 +62,60 @@ export default function App() {
       setHistory(data);
     } catch (error) {
       setStatus(`History error: ${error.message}`);
+    }
+  }
+
+  async function deleteHistoryItem(filename) {
+    if (!filename) {
+      return;
+    }
+
+    setDeletingFilename(filename);
+    setStatus("Deleting history item...");
+
+    try {
+      const response = await fetch(`${API_BASE}/api/history/${encodeURIComponent(filename)}`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Delete failed");
+      }
+
+      setStatus("History item deleted");
+      await loadHistory();
+    } catch (error) {
+      setStatus(`Delete failed: ${error.message}`);
+    } finally {
+      setDeletingFilename("");
+    }
+  }
+
+  async function clearAllHistory() {
+    if (!window.confirm("Delete all history? This cannot be undone.")) {
+      return;
+    }
+
+    setClearingHistory(true);
+    setStatus("Clearing history...");
+
+    try {
+      const response = await fetch(`${API_BASE}/api/history`, {
+        method: "DELETE",
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.detail || "Clear history failed");
+      }
+
+      setStatus(`History cleared (${payload.deleted_count || 0} items removed)`);
+      await loadHistory();
+    } catch (error) {
+      setStatus(`Clear failed: ${error.message}`);
+    } finally {
+      setClearingHistory(false);
     }
   }
 
@@ -367,9 +423,14 @@ export default function App() {
         <section className="panel">
           <div className="row-meta">
             <h2>Recent posts</h2>
-            <button className="ghost" onClick={() => void loadHistory()}>
-              Refresh
-            </button>
+            <div className="history-actions">
+              <button className="ghost" onClick={() => void loadHistory()}>
+                Refresh
+              </button>
+              <button className="danger" disabled={clearingHistory || history.length === 0} onClick={clearAllHistory}>
+                {clearingHistory ? "Clearing..." : "Clear All"}
+              </button>
+            </div>
           </div>
 
           <div className="history-list">
@@ -383,6 +444,15 @@ export default function App() {
                     <span>{item.timestamp}</span>
                   </div>
                   <p>{item.content}</p>
+                  <div className="history-item-actions">
+                    <button
+                      className="danger subtle"
+                      onClick={() => void deleteHistoryItem(item.filename)}
+                      disabled={deletingFilename === item.filename || clearingHistory}
+                    >
+                      {deletingFilename === item.filename ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
                 </article>
               ))
             )}
