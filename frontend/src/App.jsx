@@ -284,6 +284,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <div className="profile-avatar" title="Your profile">😊</div>
       <header className="hero">
         <div className="header-content">
           <div>
