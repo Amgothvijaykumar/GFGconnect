@@ -6,6 +6,7 @@ Includes automated login via CLI credentials (never stored).
 
 import os
 import getpass
+import re
 from playwright.sync_api import sync_playwright
 from utils.helpers import logger, log_success, log_error, log_info, log_warning
 
@@ -521,6 +522,9 @@ class GFGBrowser:
                 log_error("Could not find post textbox. Selectors may need updating.")
                 return False
 
+            # Normalize content to avoid hidden Unicode chars breaking hashtag parsing.
+            prepared_content = self._prepare_post_content(content)
+
             # Focus editor and clear existing draft text if any.
             textbox.click()
             self.page.wait_for_timeout(300)
@@ -528,16 +532,178 @@ class GFGBrowser:
             self.page.keyboard.press("Backspace")
             self.page.wait_for_timeout(100)
 
-            # Use keyboard typing for contenteditable reliability.
-            self.page.keyboard.type(content, delay=10)
+            # Type content in a hashtag-aware way so platform suggestions can resolve tags.
+            self._type_content_with_hashtag_commit(prepared_content)
             self.page.wait_for_timeout(1000)
 
-            log_success(f"Post content filled ({len(content)} chars).")
+            log_success(f"Post content filled ({len(prepared_content)} chars).")
             return True
 
         except Exception as e:
             log_error(f"Failed to fill post content: {e}")
             return False
+
+    def _prepare_post_content(self, content):
+        """Normalize post text and rebuild a clean hashtag line."""
+        if not content:
+            return ""
+
+        text = content.replace("\r\n", "\n").replace("\r", "\n")
+        text = text.replace("\u00A0", " ")
+        text = re.sub(r"[\u200B-\u200D\uFEFF]", "", text)
+
+        lines = [re.sub(r"[ \t]+$", "", line) for line in text.split("\n")]
+        text = "\n".join(lines).strip()
+
+        tags = re.findall(r"(?<!\w)[#＃]([A-Za-z0-9_]{1,50})", text)
+        if not tags:
+            return text
+
+        # Keep tag order while deduplicating.
+        seen = set()
+        normalized_tags = []
+        for tag in tags:
+            key = tag.lower()
+            if key not in seen:
+                seen.add(key)
+                normalized_tags.append(f"#{key}")
+
+        text_without_tags = re.sub(r"(?<!\w)[#＃][A-Za-z0-9_]{1,50}", "", text)
+        text_without_tags = re.sub(r"[ \t]{2,}", " ", text_without_tags)
+        text_without_tags = re.sub(r"\n{3,}", "\n\n", text_without_tags).strip()
+
+        hashtag_line = " ".join(normalized_tags)
+        if not text_without_tags:
+            return hashtag_line
+        return f"{text_without_tags}\n\n{hashtag_line}"
+
+    def _type_content_with_hashtag_commit(self, content):
+        """
+        Type post content with slower handling around hashtags so hashtag chips can resolve.
+
+        Some rich editors only convert hashtags to recognized tokens when the tag is typed
+        naturally and then committed with a delimiter key.
+        """
+        hashtag_pattern = re.compile(r"(#[A-Za-z0-9_]+)")
+        lines = content.split("\n")
+
+        for line_index, line in enumerate(lines):
+            parts = hashtag_pattern.split(line)
+            for part in parts:
+                if not part:
+                    continue
+
+                if hashtag_pattern.fullmatch(part):
+                    # Type hashtag character-by-character to mimic real typing cadence.
+                    self.page.keyboard.type("#", delay=140)
+                    tag_text = part[1:]
+                    for ch in tag_text:
+                        self.page.keyboard.type(ch, delay=85)
+
+                    self.page.wait_for_timeout(520)
+                    selected = self._select_hashtag_suggestion_if_visible(preferred_tag=tag_text)
+
+                    if selected:
+                        # Add delimiter after accepted suggestion.
+                        self.page.keyboard.press("Space")
+                        self.page.wait_for_timeout(140)
+                    else:
+                        # Keep plain hashtag and commit with delimiter.
+                        self.page.keyboard.press("Space")
+                        self.page.wait_for_timeout(180)
+                else:
+                    self.page.keyboard.type(part, delay=18)
+
+            # Preserve original line breaks without adding a trailing newline.
+            if line_index < len(lines) - 1:
+                self.page.keyboard.press("Enter")
+                self.page.wait_for_timeout(80)
+
+    def _select_hashtag_suggestion_if_visible(self, preferred_tag=None):
+        """Try selecting the first visible hashtag suggestion dropdown option."""
+        suggestion_option_selectors = [
+            '[role="listbox"] [role="option"]',
+            'ul[role="listbox"] li',
+            '[role="menu"] [role="menuitem"]',
+            '[role="dialog"] [role="option"]',
+            'div[class*="suggest"] li',
+            'div[class*="suggest"] [role="option"]',
+            'div[class*="autocomplete"] li',
+            'div[class*="dropdown"] li',
+        ]
+
+        try:
+            # Small pause to allow suggestion dropdown to render.
+            self.page.wait_for_timeout(180)
+
+            for selector in suggestion_option_selectors:
+                locator = self.page.locator(selector)
+                total = min(locator.count(), 8)
+                if total == 0:
+                    continue
+
+                visible_items = []
+                for idx in range(total):
+                    candidate = locator.nth(idx)
+                    try:
+                        if candidate.is_visible():
+                            visible_items.append(candidate)
+                    except Exception:
+                        continue
+
+                if not visible_items:
+                    continue
+
+                target = visible_items[0]
+                if preferred_tag:
+                    for item in visible_items:
+                        text = (item.inner_text() or "").strip().lower()
+                        if preferred_tag.lower() in text:
+                            target = item
+                            break
+
+                try:
+                    target.click(timeout=500)
+                except Exception:
+                    self.page.keyboard.press("ArrowDown")
+                    self.page.wait_for_timeout(120)
+                    self.page.keyboard.press("Enter")
+
+                log_info(f"Hashtag suggestion selected via: {selector}")
+                return True
+
+            # Fallback: text-based click in case options are rendered with unusual structure.
+            if preferred_tag:
+                variants = [f"#{preferred_tag}", preferred_tag]
+                broad_selectors = [
+                    'li',
+                    '[role="option"]',
+                    '[role="menuitem"]',
+                    'button',
+                    'div',
+                    'span',
+                ]
+                for variant in variants:
+                    for base in broad_selectors:
+                        locator = self.page.locator(f'{base}:has-text("{variant}")')
+                        total = min(locator.count(), 6)
+                        for idx in range(total):
+                            candidate = locator.nth(idx)
+                            try:
+                                if candidate.is_visible():
+                                    candidate.click(timeout=500)
+                                    log_info(f"Hashtag suggestion selected via text match: {base}")
+                                    return True
+                            except Exception:
+                                continue
+
+            # No visible suggestion options found through known selectors.
+            return False
+        except Exception:
+            # Any selector or visibility failure should gracefully fall back.
+            pass
+
+        return False
 
     def _find_first_visible(self, selectors, timeout=5000):
         """Return first visible element found among selectors, otherwise None."""
