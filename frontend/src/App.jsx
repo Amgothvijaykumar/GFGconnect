@@ -10,6 +10,23 @@ const PLATFORM_LABELS = {
   twitter: "Twitter/X",
 };
 
+const HISTORY_STATUS_LABELS = {
+  posted: "Success",
+  failed: "Failed",
+  login_failed: "Login Failed",
+  login_required: "Login Required",
+  draft: "Draft",
+};
+
+function normalizeStatus(status) {
+  return (status || "").toString().trim().toLowerCase();
+}
+
+function statusBadgeText(status) {
+  const key = normalizeStatus(status);
+  return HISTORY_STATUS_LABELS[key] || (status || "Unknown");
+}
+
 export default function App() {
   const [rawText, setRawText] = useState("");
   const [preview, setPreview] = useState("");
@@ -237,9 +254,15 @@ export default function App() {
         throw new Error(payload.detail || "Publish failed");
       }
 
-      setStatus(`Posted to ${PLATFORM_LABELS[selectedPlatform]} successfully`);
-      setRawText("");
-      setPreview("");
+      const resultStatus = normalizeStatus(payload.status);
+      if (resultStatus === "posted") {
+        setStatus(`Posted to ${PLATFORM_LABELS[selectedPlatform]} successfully`);
+        setRawText("");
+        setPreview("");
+      } else {
+        setStatus(payload.message || `Post not completed (${payload.status || "unknown status"})`);
+      }
+
       await loadHistory();
       setActiveTab("history");
     } catch (error) {
@@ -441,7 +464,9 @@ export default function App() {
               history.map((item) => (
                 <article key={item.filename} className="history-item">
                   <div className="row-meta">
-                    <strong>{item.status.toUpperCase()}</strong>
+                    <strong className={`history-status status-${normalizeStatus(item.status)}`}>
+                      {statusBadgeText(item.status)}
+                    </strong>
                     <span>{item.timestamp}</span>
                   </div>
                   <p>{item.content}</p>

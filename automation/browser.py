@@ -100,6 +100,21 @@ class GFGBrowser:
         except Exception:
             pass  # No cookie banner, that's fine
 
+    def _is_any_selector_visible(self, selectors):
+        """Return True if any selector resolves to a visible element."""
+        for selector in selectors:
+            try:
+                nodes = self.page.query_selector_all(selector)
+                for node in nodes:
+                    try:
+                        if node.is_visible():
+                            return True
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+        return False
+
     def check_login_status(self):
         """
         Check if the user is logged in.
@@ -108,23 +123,48 @@ class GFGBrowser:
             bool: True if logged in, False otherwise
         """
         try:
-            # If "Sign In" button exists on this page, user is NOT logged in
-            sign_in_btn = self.page.query_selector('button.signinButton.login-modal-btn')
-            if sign_in_btn:
+            current_url = (self.page.url or "").lower()
+
+            # Fast unauthenticated checks first.
+            unauth_selectors = [
+                'button.signinButton.login-modal-btn',
+                'button.signinButton',
+                'button:has-text("Sign In")',
+                'a:has-text("Sign In")',
+                'input#luser',
+                'input.loginInput[placeholder*="Username" i]',
+                'input[type="password"]',
+            ]
+            if self._is_any_selector_visible(unauth_selectors):
                 log_warning("User is NOT logged in.")
                 return False
 
-            # Also check for the top-right "Sign In" text
-            sign_in_link = self.page.query_selector('text="Sign In"')
-            if sign_in_link:
-                # Could be a post's Sign In - check if it's in the header area
-                bounding = sign_in_link.bounding_box()
-                if bounding and bounding["y"] < 60:
-                    log_warning("User is NOT logged in.")
-                    return False
+            # If still on auth domain and login form is absent, it can be redirecting.
+            # Continue with positive checks before concluding.
+            auth_domain = "auth.geeksforgeeks.org" in current_url
 
-            log_success("User is logged in.")
-            return True
+            logged_in_indicators = [
+                'div.ContentEditable__root[role="textbox"]',
+                'div[role="textbox"][contenteditable="true"]',
+                'text="Share your thoughts"',
+                'text="Start a post"',
+                'button:has-text("Create")',
+                'a[href*="/connect/home"]',
+                'a[href*="/connect/profile"]',
+                'img[alt*="avatar" i]',
+            ]
+            if self._is_any_selector_visible(logged_in_indicators):
+                log_success("User is logged in.")
+                return True
+
+            # If page is on connect routes and no explicit Sign In controls are visible,
+            # treat as logged in to avoid false negatives from transient DOM states.
+            if ("/connect/home" in current_url or "/connect/explore" in current_url) and not auth_domain:
+                log_success("User appears logged in (connect page loaded).")
+                return True
+
+            log_warning("Could not confirm login status yet.")
+            return False
         except Exception:
             log_warning("Could not determine login status.")
             return False
@@ -411,15 +451,27 @@ class GFGBrowser:
                 log_warning("Could not find Sign In button, trying keyboard.")
                 self.page.press('input[type="password"]', 'Enter')
 
-            # Wait for login to complete
-            self.page.wait_for_timeout(3000)
+            # Wait for navigation/DOM update and verify with retries.
+            try:
+                self.page.wait_for_load_state("networkidle", timeout=8000)
+            except Exception:
+                pass
 
-            if self.check_login_status():
-                log_success("Login successful! 🎉")
-                return True
-            else:
-                log_error("Login check failed after submission.")
-                return False
+            # If still on auth domain, try landing on connect home once.
+            try:
+                if "auth.geeksforgeeks.org" in (self.page.url or "").lower():
+                    self.page.goto(GFG_CONNECT_HOME, wait_until="domcontentloaded", timeout=12000)
+            except Exception:
+                pass
+
+            for _ in range(5):
+                self.page.wait_for_timeout(1500)
+                if self.check_login_status():
+                    log_success("Login successful! 🎉")
+                    return True
+
+            log_error("Login check failed after submission.")
+            return False
 
         except Exception as e:
             log_error(f"Login with credentials failed: {e}")

@@ -135,13 +135,13 @@ def publish_post(payload: PostRequest):
             if not already_logged_in:
                 if payload.email and payload.password:
                     if not browser.login_with_credentials(payload.email, payload.password):
-                        save_post_history(payload.content, status="draft", platform=payload.platform)
+                        save_post_history(payload.content, status="login_failed", platform=payload.platform)
                         return PostResponse(
                             status="login_failed",
                             message="Login failed with provided credentials.",
                         )
                 else:
-                    save_post_history(payload.content, status="draft", platform=payload.platform)
+                    save_post_history(payload.content, status="login_required", platform=payload.platform)
                     return PostResponse(
                         status="login_required",
                         message="Please login in the opened browser window, then submit again.",
@@ -158,7 +158,7 @@ def publish_post(payload: PostRequest):
         elif payload.platform == "linkedin":
             if payload.email and payload.password:
                 if not browser.login_with_credentials(payload.email, payload.password):
-                    save_post_history(payload.content, status="draft", platform=payload.platform)
+                    save_post_history(payload.content, status="login_failed", platform=payload.platform)
                     return PostResponse(
                         status="login_failed",
                         message="LinkedIn login failed with provided credentials.",
@@ -173,7 +173,7 @@ def publish_post(payload: PostRequest):
         elif payload.platform == "twitter":
             if payload.email and payload.password:
                 if not browser.login_with_credentials(payload.email, payload.password):
-                    save_post_history(payload.content, status="draft", platform=payload.platform)
+                    save_post_history(payload.content, status="login_failed", platform=payload.platform)
                     return PostResponse(
                         status="login_failed",
                         message="Twitter login failed with provided credentials.",

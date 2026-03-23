@@ -529,6 +529,36 @@ button:disabled {
   transition: color var(--transition-normal);
 }
 
+.history-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.history-status.status-posted {
+  color: #065f46;
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.history-status.status-failed,
+.history-status.status-login_failed {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.history-status.status-login_required,
+.history-status.status-draft {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
 .history-item:hover p {
   color: #0f766e;
 }

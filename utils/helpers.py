@@ -52,7 +52,7 @@ def save_post_history(content, status="posted", platform=None):
 
     Args:
         content: The post content
-        status: 'posted', 'draft', or 'failed'
+        status: 'posted', 'failed', 'login_failed', 'login_required', or 'draft'
         platform: 'gfg', 'linkedin', 'twitter' (optional)
     """
     history_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "history")
