@@ -22,6 +22,7 @@ an engaging, professional post that's ready to publish.
 
 Rules:
 - Keep it concise: 3-5 short paragraphs MAX
+- Prefer point-wise, skimmable lines over long paragraphs for better readability
 - Use proper grammar and professional tone
 - Add relevant emojis (but don't overdo it — 1-2 per paragraph max)
 - Structure: Start with a hook → What was learned → Key takeaway
